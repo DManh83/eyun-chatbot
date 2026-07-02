@@ -1,5 +1,5 @@
 import sequelize from "../config/database"
 
 export { sequelize }
-export { default as User } from "./User"
+export { default as User } from "./user"
 
