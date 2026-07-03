@@ -81,6 +81,7 @@ export class EyunService {
 
     private async request<T>(path: string, data?: unknown): Promise<EyunResponse<T>> {
         const response = await this.client.post<EyunResponse<T>>(path, data || {})
+        // console.log("request", response)
         return response.data
     }
 
@@ -98,6 +99,8 @@ export class EyunService {
         proxyPassword?: string
         aid?: string
     }): Promise<EyunResponse<{ wId: string; qrCodeUrl: string }>> {
+        console.log("iPadLogin", params)
+        console.log("iPadLogin", this.client.defaults.headers)
         return this.request("/iPadLogin", params)
     }
 
@@ -105,7 +108,7 @@ export class EyunService {
      * Step 2: After scanning QR code, get login result
      * POST /getIPadLoginInfo
      */
-    async getIPadLoginInfo(params: { wId: string; autoCheck: boolean; verifyCode?: string }): Promise<EyunResponse<LoginResponse>> {
+    async getIPadLoginInfo(params: { wId: string; autoCheck: boolean; verifyCode?: string | null }): Promise<EyunResponse<LoginResponse>> {
         return this.request("/getIPadLoginInfo", params)
     }
 

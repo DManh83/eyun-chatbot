@@ -11,7 +11,7 @@ interface UserAttributes {
     sex: number | null
     mobilePhone: string | null
     uin: number | null
-    deviceType: number | null
+    deviceType: string | null
     createdAt?: Date
     updatedAt?: Date
 }
@@ -19,7 +19,7 @@ interface UserAttributes {
 interface UserCreationAttributes
     extends Optional<
         UserAttributes,
-        "id" | "wcId" | "nickName" | "headUrl" | "sex" | "mobilePhone" | "uin" | "deviceType" | "createdAt" | "updatedAt"
+        "id" | "wcId" | "nickName" | "headUrl" | "sex" | "mobilePhone" | "uin" | "deviceType" | "createdAt" | "updatedAt" | "wAccount" | "wId"
     > {}
 
 class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
@@ -32,7 +32,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
     declare sex: number | null
     declare mobilePhone: string | null
     declare uin: number | null
-    declare deviceType: number | null
+    declare deviceType: string | null
     declare readonly createdAt: Date
     declare readonly updatedAt: Date
 }
@@ -54,7 +54,7 @@ User.init(
         },
         wAccount: {
             type: DataTypes.TEXT,
-            allowNull: false,
+            allowNull: true,
         },
         nickName: {
             type: DataTypes.STRING(255),
@@ -69,11 +69,11 @@ User.init(
             allowNull: true,
         },
         mobilePhone: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.STRING(20),
             allowNull: true,
         },
         deviceType: {
-            type: DataTypes.DATE,
+            type: DataTypes.STRING(50),
             allowNull: true,
         },
         uin: {

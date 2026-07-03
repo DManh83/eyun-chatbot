@@ -49,19 +49,23 @@ export const iPadLogin = async (req: Request, res: Response): Promise<void> => {
 export const getIPadLoginInfo = async (req: Request, res: Response): Promise<void> => {
     try {
         const { wId, autoCheck, verifyCode } = req.body
+        const user = await User.findOne({ where: { wId } })
+        console.log("user", user)
+        if (!user) {
+            res.status(404).json({ code: "1001", message: "User not found", data: null })
+            return
+        }
         const eyun = getEyunService()
         const result = await eyun.getIPadLoginInfo({ wId, autoCheck, verifyCode })
 
         if (result.code === "1000" && result.data) {
-            await User.upsert({
-                wId: result.data.wId,
+            await user.update({
                 wcId: result.data.wcId || "",
                 wAccount: result.data.wAccount || "",
                 nickName: result.data.nickName || null,
                 headUrl: result.data.headUrl || null,
                 sex: result.data.sex || null,
                 mobilePhone: result.data.mobilePhone || null,
-                deviceType: result.data.deviceType || null,
                 uin: result.data.uin || null,
             })
         }
@@ -86,3 +90,4 @@ export const getHttpCallbackUrl = async (_req: Request, res: Response): Promise<
         res.status(500).json({ code: "1001", message, data: null })
     }
 }
+

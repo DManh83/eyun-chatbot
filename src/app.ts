@@ -29,16 +29,16 @@ const startServer = async (): Promise<void> => {
         await sequelize.authenticate()
         console.log("✅ Database connection established successfully.")
 
-        await sequelize.sync({ alter: true, force: true })
+        await sequelize.sync({ alter: true })
         console.log("✅ Database synchronized.")
 
         // Initialize Eyun Service with base URL (token will be set dynamically on login)
-        const eyunBaseUrl = process.env.EYUN_BASE_URL;
+        const eyunBaseUrl = process.env.EYUN_BASE_URL
         if (eyunBaseUrl) {
-          initEyunService({ baseUrl: eyunBaseUrl, token: '' });
-          console.log('✅ Eyun Service initialized');
+            initEyunService({ baseUrl: eyunBaseUrl, token: "" })
+            console.log("✅ Eyun Service initialized")
         } else {
-          console.log('⚠️ Eyun Service not configured (EYUN_BASE_URL required)');
+            console.log("⚠️ Eyun Service not configured (EYUN_BASE_URL required)")
         }
 
         app.listen(PORT, () => {
