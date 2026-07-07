@@ -1,6 +1,8 @@
 import { getEyunService } from "./eyunService"
 import { sendMessageToCoze } from "./cozeService"
-import { ProcessedMessage } from "../models"
+import { getOpenClawService } from "./openclawService"
+import { chatHistory } from "../models"
+import { isWhitelisted } from "../config/whitelist"
 
 interface IncomingMessage {
     msgId: string
@@ -28,7 +30,7 @@ export const processIncomingMessage = async (message: IncomingMessage): Promise<
 
     try {
         // Mark as pending before calling Coze
-        await ProcessedMessage.create({
+        await chatHistory.create({
             msgId,
             wId,
             fromWxId,
@@ -36,7 +38,17 @@ export const processIncomingMessage = async (message: IncomingMessage): Promise<
         })
 
         console.log("------------ aiResponse ------------")
-        const aiResponse = await sendMessageToCoze(content, fromWxId)
+        let aiResponse: string | null = null
+
+        if (isWhitelisted(fromWxId)) {
+            // User is in whitelist → use OpenClaw
+            console.log(`[Quote] ${fromWxId} is in whitelist, using OpenClaw`)
+            const openclaw = getOpenClawService()
+            aiResponse = await openclaw.chatWithContext(fromWxId, content)
+        } else {
+            // User is not in whitelist → use Coze
+            aiResponse = await sendMessageToCoze(content, fromWxId)
+        }
         if (aiResponse) {
             console.log("------------ getEyunService ------------")
             const eyun = getEyunService()
@@ -44,7 +56,7 @@ export const processIncomingMessage = async (message: IncomingMessage): Promise<
             console.log(`[Quote] Sent Coze reply to ${fromWxId}: ${aiResponse}`)
 
             // Update reply
-            await ProcessedMessage.update({ reply: aiResponse }, { where: { msgId } })
+            await chatHistory.update({ reply: aiResponse }, { where: { msgId } })
         } else {
             console.log("[Quote] Coze failed, notifying customer to retry")
             const eyun = getEyunService()

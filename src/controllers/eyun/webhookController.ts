@@ -1,7 +1,7 @@
 import { Request, Response } from "express"
 import { getEyunService } from "../../services/eyunService"
 import { processIncomingMessage } from "../../services/quoteService"
-import { ProcessedMessage } from "../../models"
+import { chatHistory } from "../../models"
 
 export const setWebhook = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -58,7 +58,7 @@ export const webhookCallback = async (req: Request, res: Response): Promise<void
             const msgType = messageData.messageType === "60001" ? 1 : 0
 
             // Check duplicate by msgId
-            const existing = await ProcessedMessage.findOne({ where: { msgId } })
+            const existing = await chatHistory.findOne({ where: { msgId } })
             if (existing) {
                 console.log(`[Webhook] Message ${msgId} already processed, skipping`)
                 res.json({ code: "1000", message: "ok" })

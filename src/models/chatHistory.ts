@@ -1,7 +1,7 @@
 import { DataTypes, Model, Optional } from "sequelize"
 import sequelize from "../config/database"
 
-interface ProcessedMessageAttributes {
+interface chatHistoryAttributes {
     id: number
     msgId: string
     wId: string
@@ -12,20 +12,11 @@ interface ProcessedMessageAttributes {
     updatedAt?: Date
 }
 
-interface ProcessedMessageCreationAttributes extends Optional<ProcessedMessageAttributes, "id" | "reply" | "createdAt" | "updatedAt"> {}
+interface chatHistoryCreationAttributes extends Optional<chatHistoryAttributes, "id" | "reply" | "createdAt" | "updatedAt"> {}
 
-class ProcessedMessage extends Model<ProcessedMessageAttributes, ProcessedMessageCreationAttributes> implements ProcessedMessageAttributes {
-    declare id: number
-    declare msgId: string
-    declare wId: string
-    declare fromWxId: string
-    declare content: string
-    declare reply: string | null
-    declare readonly createdAt: Date
-    declare readonly updatedAt: Date
-}
+class chatHistory extends Model<chatHistoryAttributes, chatHistoryCreationAttributes> {}
 
-ProcessedMessage.init(
+chatHistory.init(
     {
         id: {
             type: DataTypes.INTEGER,
@@ -56,11 +47,11 @@ ProcessedMessage.init(
     },
     {
         sequelize,
-        modelName: "ProcessedMessage",
-        tableName: "processed_messages",
+        modelName: "chatHistory",
+        tableName: "chat_history",
         timestamps: true,
     }
 )
 
-export default ProcessedMessage
+export default chatHistory
 

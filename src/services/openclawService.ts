@@ -54,19 +54,55 @@ class OpenClawService {
     }
 
     /**
-     * Send chat message to OpenClaw HTTP API and get AI response
-     * Uses /v1/responses endpoint
+     * Send chat message to OpenClaw with conversation context
+     * Uses x-openclaw-session-key header for session management
+     * Each customer (wcId) has their own persistent conversation window on OpenClaw side
      */
-    async chatCompletion(messages: OpenClawMessage[]): Promise<string> {
+    async chatWithContext(wcId: string, content: string): Promise<string> {
+        const sessionKey = `wc-${wcId}`
+        const userId = `ai-wc:${wcId}`
+
+        // Build messages for context
+        const messages: OpenClawMessage[] = [
+            { role: "user", content }
+        ]
+
+        const response = await this.chatCompletion(sessionKey, userId, messages)
+        return response
+    }
+
+    /**
+     * Send chat message to OpenClaw HTTP API and get AI response
+     * Uses /v1/responses endpoint with session key header
+     */
+    async chatCompletion(
+        sessionKey: string,
+        userId: string,
+        messages: OpenClawMessage[],
+        instructions?: string
+    ): Promise<string> {
         try {
-            // Convert messages to single input string
+            // Build input from messages
             const input = messages.map((m) => `${m.role === "system" ? "" : m.role + ": "}${m.content}`).join("\n")
 
-            const response = await this.client.post<OpenClawResponse>("/v1/responses", {
+            // Build request body
+            const requestBody: Record<string, unknown> = {
                 model: "openclaw/default",
                 input,
+                user: userId,
                 stream: false,
-            })
+            }
+
+            // Only add instructions on first request of session
+            if (instructions) {
+                requestBody.instructions = instructions
+            }
+
+            // Set session key header
+            const headers: Record<string, string> = {}
+            headers["x-openclaw-session-key"] = sessionKey
+
+            const response = await this.client.post<OpenClawResponse>("/v1/responses", requestBody, { headers })
 
             if (response.status !== 200) {
                 throw new Error(`OpenClaw API Error: HTTP ${response.status}`)
@@ -85,6 +121,11 @@ class OpenClawService {
                         content = textBlock.text
                     }
                 }
+            }
+
+            // Fallback: check for output_text directly
+            if (!content && (response.data as any).output_text) {
+                content = (response.data as any).output_text
             }
 
             if (!content) {
@@ -109,10 +150,10 @@ class OpenClawService {
     }
 
     /**
-     * Send a simple chat message and get response
+     * Send a simple chat message and get response (no context/history)
      */
-    async chat(content: string): Promise<string> {
-        return this.chatCompletion([{ role: "user", content }])
+    async chat(sessionKey: string, userId: string, content: string): Promise<string> {
+        return this.chatCompletion(sessionKey, userId, [{ role: "user", content }])
     }
 }
 
@@ -126,4 +167,3 @@ export const getOpenClawService = (): OpenClawService => {
 }
 
 export default OpenClawService
-
