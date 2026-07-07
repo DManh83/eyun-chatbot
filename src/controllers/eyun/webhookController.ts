@@ -1,6 +1,7 @@
 import { Request, Response } from "express"
 import { getEyunService } from "../../services/eyunService"
 import { processIncomingMessage } from "../../services/quoteService"
+import { ProcessedMessage } from "../../models"
 
 export const setWebhook = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -46,16 +47,35 @@ export const webhookCallback = async (req: Request, res: Response): Promise<void
             res.json({ code: "1000", message: "ok" })
             return
         }
+        console.log("[Webhook] Processing message", messageData)
 
         // Map Eyun webhook format to IncomingMessage format
         if (messageData.data) {
+            const msgId = String(messageData.data.msgId)
+            const fromWxId = messageData.data.fromUser
+            const content = messageData.data.content
+            const wId = messageData.data.wId
+            const msgType = messageData.messageType === "60001" ? 1 : 0
+
+            // Check duplicate by msgId
+            const existing = await ProcessedMessage.findOne({ where: { msgId } })
+            if (existing) {
+                console.log(`[Webhook] Message ${msgId} already processed, skipping`)
+                res.json({ code: "1000", message: "ok" })
+                return
+            }
+
+            if (msgType !== 1) {
+                console.log(`[Webhook] Skipping non-text message type: ${msgType}`)
+                return
+            }
+
             const mappedMessage = {
-                fromWxId: messageData.data.fromUser,
+                fromWxId,
                 toWxId: messageData.data.toUser,
-                msgId: String(messageData.data.msgId || messageData.id),
-                content: messageData.data.content,
-                msgType: messageData.messageType === "60001" ? 1 : 0,
-                wId: messageData.data.wId,
+                msgId,
+                content,
+                wId,
             }
             await processIncomingMessage(mappedMessage)
         }

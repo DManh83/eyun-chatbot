@@ -1,26 +1,23 @@
 import { getEyunService } from "./eyunService"
 import { sendMessageToCoze } from "./cozeService"
+import { ProcessedMessage } from "../models"
 
 interface IncomingMessage {
     msgId: string
     fromWxId: string
     toWxId: string
     content: string
-    msgType: number
     wId: string
 }
 
 /**
  * Process incoming webhook message and auto-reply using Coze AI
+ * NOTE: Duplicate check is done in webhookController before calling this
  */
 export const processIncomingMessage = async (message: IncomingMessage): Promise<void> => {
-    const { fromWxId, content, msgType, wId } = message
+    const { msgId, fromWxId, content, wId } = message
 
     // Only process text messages
-    if (msgType !== 1) {
-        console.log(`[Webhook] Skipping non-text message type: ${msgType}`)
-        return
-    }
 
     console.log(`[Quote] Processing message from ${fromWxId}: ${content}`)
 
@@ -30,6 +27,14 @@ export const processIncomingMessage = async (message: IncomingMessage): Promise<
     }
 
     try {
+        // Mark as pending before calling Coze
+        await ProcessedMessage.create({
+            msgId,
+            wId,
+            fromWxId,
+            content,
+        })
+
         console.log("------------ aiResponse ------------")
         const aiResponse = await sendMessageToCoze(content, fromWxId)
         if (aiResponse) {
@@ -37,10 +42,14 @@ export const processIncomingMessage = async (message: IncomingMessage): Promise<
             const eyun = getEyunService()
             await eyun.sendText({ wId, wcId: fromWxId, content: aiResponse })
             console.log(`[Quote] Sent Coze reply to ${fromWxId}: ${aiResponse}`)
+
+            // Update reply
+            await ProcessedMessage.update({ reply: aiResponse }, { where: { msgId } })
         } else {
             console.log("[Quote] Coze failed, notifying customer to retry")
             const eyun = getEyunService()
             await eyun.sendText({ wId, wcId: fromWxId, content: "Sorry, the system is busy. Please try again in a few seconds. Thank you!" })
+            // Leave reply as null so it can be retried
         }
     } catch (error) {
         console.error(`[Quote] Failed to get Coze response:`, error)

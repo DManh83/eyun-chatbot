@@ -78,6 +78,38 @@ export const getIPadLoginInfo = async (req: Request, res: Response): Promise<voi
 }
 
 /**
+ * Secondary login - re-login with existing wcId - POST /secondLogin
+ * Used to re-establish a connection using a previously logged in wcId
+ */
+export const secondLogin = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { wcId, aid } = req.body
+        const eyun = getEyunService()
+        const result = await eyun.secondLogin({ wcId, aid })
+
+        // If login successful, update user in database
+        if (result.code === "1000" && result.data) {
+            await User.upsert({
+                wId: result.data.wId,
+                wcId: wcId || "",
+                wAccount: result.data.wAccount || "",
+                nickName: result.data.nickName || null,
+                headUrl: result.data.headUrl || null,
+                sex: result.data.sex ?? null,
+                mobilePhone: null,
+                deviceType: null,
+                uin: null,
+            })
+        }
+
+        res.json(result)
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error"
+        res.status(500).json({ code: "1001", message, data: null })
+    }
+}
+
+/**
  * Get current callback URL - POST /getHttpCallbackUrl
  */
 export const getHttpCallbackUrl = async (_req: Request, res: Response): Promise<void> => {
