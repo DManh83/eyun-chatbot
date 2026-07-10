@@ -10,6 +10,7 @@ interface IncomingMessage {
     toWxId: string
     content: string
     wId: string
+    nickName: string
 }
 
 /**
@@ -17,7 +18,7 @@ interface IncomingMessage {
  * NOTE: Duplicate check is done in webhookController before calling this
  */
 export const processIncomingMessage = async (message: IncomingMessage): Promise<void> => {
-    const { msgId, fromWxId, content, wId } = message
+    const { msgId, fromWxId, content, wId, nickName } = message
 
     // Only process text messages
 
@@ -30,41 +31,45 @@ export const processIncomingMessage = async (message: IncomingMessage): Promise<
 
     try {
         // Mark as pending before calling Coze
-        await chatHistory.create({
-            msgId,
-            wId,
-            fromWxId,
-            content,
-        })
+        // await chatHistory.create({
+        //     msgId,
+        //     wcId: fromWxId,
+        //     fromWxId,
+        //     content,
+        // })
 
-        console.log("------------ aiResponse ------------")
         let aiResponse: string | null = null
 
         if (isWhitelisted(fromWxId)) {
             // User is in whitelist → use OpenClaw
             console.log(`[Quote] ${fromWxId} is in whitelist, using OpenClaw`)
             const openclaw = getOpenClawService()
-            aiResponse = await openclaw.chatWithContext(fromWxId, content)
+            aiResponse = await openclaw.chatWithContext(nickName, content)
         } else {
             // User is not in whitelist → use Coze
+            console.log(`[Quote] ${fromWxId} is not in whitelist, using Coze`)
             aiResponse = await sendMessageToCoze(content, fromWxId)
         }
         if (aiResponse) {
-            console.log("------------ getEyunService ------------")
+            console.log(`[Quote] AI response: ${aiResponse}`)
             const eyun = getEyunService()
             await eyun.sendText({ wId, wcId: fromWxId, content: aiResponse })
-            console.log(`[Quote] Sent Coze reply to ${fromWxId}: ${aiResponse}`)
-
-            // Update reply
-            await chatHistory.update({ reply: aiResponse }, { where: { msgId } })
+            console.log(`[Quote] Sent reply to ${fromWxId}: ${aiResponse}`)
+            await chatHistory.create({ msgId, wId, fromWxId, content, reply: aiResponse })
         } else {
-            console.log("[Quote] Coze failed, notifying customer to retry")
-            const eyun = getEyunService()
-            await eyun.sendText({ wId, wcId: fromWxId, content: "Sorry, the system is busy. Please try again in a few seconds. Thank you!" })
-            // Leave reply as null so it can be retried
+            console.log("[Quote] AI failed, notifying customer to retry")
+            const errorMessage = "Sorry, the system is busy. Please try again in a few seconds. Thank you!"
+            await chatHistory.create({ msgId, wId, fromWxId, content, reply: errorMessage })
         }
     } catch (error) {
-        console.error(`[Quote] Failed to get Coze response:`, error)
+        console.error(`[Quote] Failed to process message:`, error)
+        const errorMessage = "Sorry, the system is busy. Please try again in a few seconds. Thank you!"
+        if (isWhitelisted(fromWxId)) {
+            console.log(`[Quote] ${fromWxId} is in whitelist, sending error message to OpenClaw`)
+        } else {
+            console.log(`[Quote] ${fromWxId} is not in whitelist, sending error message to Coze`)
+        }
+        await chatHistory.create({ msgId, wId, fromWxId, content, reply: errorMessage })
     }
 }
 

@@ -49,7 +49,7 @@ class OpenClawService {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${OPENCLAW_TOKEN}`,
             },
-            timeout: 60000, // 60s timeout for AI responses
+            timeout: 3000000, // 180s timeout for AI responses
         })
     }
 
@@ -58,14 +58,12 @@ class OpenClawService {
      * Uses x-openclaw-session-key header for session management
      * Each customer (wcId) has their own persistent conversation window on OpenClaw side
      */
-    async chatWithContext(wcId: string, content: string): Promise<string> {
-        const sessionKey = `wc-${wcId}`
-        const userId = `ai-wc:${wcId}`
+    async chatWithContext(nickName: string, content: string): Promise<string> {
+        const sessionKey = nickName
+        const userId = nickName
 
         // Build messages for context
-        const messages: OpenClawMessage[] = [
-            { role: "user", content }
-        ]
+        const messages: OpenClawMessage[] = [{ role: "user", content }]
 
         const response = await this.chatCompletion(sessionKey, userId, messages)
         return response
@@ -75,12 +73,7 @@ class OpenClawService {
      * Send chat message to OpenClaw HTTP API and get AI response
      * Uses /v1/responses endpoint with session key header
      */
-    async chatCompletion(
-        sessionKey: string,
-        userId: string,
-        messages: OpenClawMessage[],
-        instructions?: string
-    ): Promise<string> {
+    async chatCompletion(sessionKey: string, userId: string, messages: OpenClawMessage[], instructions?: string): Promise<string> {
         try {
             // Build input from messages
             const input = messages.map((m) => `${m.role === "system" ? "" : m.role + ": "}${m.content}`).join("\n")
@@ -167,3 +160,4 @@ export const getOpenClawService = (): OpenClawService => {
 }
 
 export default OpenClawService
+

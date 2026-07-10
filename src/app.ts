@@ -29,7 +29,7 @@ const startServer = async (): Promise<void> => {
         await sequelize.authenticate()
         console.log("✅ Database connection established successfully.")
 
-        await sequelize.sync({ alter: true })
+        // await sequelize.sync({ alter: true })
         console.log("✅ Database synchronized.")
 
         // Initialize Eyun Service with base URL (token will be set dynamically on login)

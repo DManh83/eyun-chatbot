@@ -1,6 +1,7 @@
 import { Request, Response } from "express"
 import { getEyunService } from "../../services/eyunService"
 import { processIncomingMessage } from "../../services/quoteService"
+import { saveContact } from "../../services/contactService"
 import { chatHistory } from "../../models"
 
 export const setWebhook = async (req: Request, res: Response): Promise<void> => {
@@ -56,6 +57,18 @@ export const webhookCallback = async (req: Request, res: Response): Promise<void
             const content = messageData.data.content
             const wId = messageData.data.wId
             const msgType = messageData.messageType === "60001" ? 1 : 0
+            let nickName = extractNickname(messageData.data.pushContent)
+
+            // Get contact info and save user to database
+            try {
+                const contact = await saveContact(wId, fromWxId)
+                // console.log("[Webhook] Contact", contact)
+                if (contact) {
+                    nickName = contact.nickName || nickName
+                }
+            } catch (err) {
+                console.log("[Webhook] Failed to get contact, using pushContent nickname")
+            }
 
             // Check duplicate by msgId
             const existing = await chatHistory.findOne({ where: { msgId } })
@@ -76,6 +89,7 @@ export const webhookCallback = async (req: Request, res: Response): Promise<void
                 msgId,
                 content,
                 wId,
+                nickName: nickName || "",
             }
             await processIncomingMessage(mappedMessage)
         }
@@ -85,5 +99,15 @@ export const webhookCallback = async (req: Request, res: Response): Promise<void
         console.error("[Webhook] Error processing callback:", error)
         res.json({ code: "1000", message: "ok" }) // Always return ok to prevent retries
     }
+}
+
+/**
+ * Extract nickname from pushContent
+ * Format: "Bruce : 把这个改成我的微信昵称" -> "Bruce"
+ */
+function extractNickname(pushContent: string | undefined): string | undefined {
+    if (!pushContent) return undefined
+    const parts = pushContent.split(" : ")
+    return parts.length > 1 ? parts[0] : undefined
 }
 
