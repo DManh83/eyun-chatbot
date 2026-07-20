@@ -1,5 +1,5 @@
 import { Router } from "express"
-import { iPadLogin, getIPadLoginInfo, secondLogin, getHttpCallbackUrl } from "../../controllers/eyun/authController"
+import { iPadLogin, getIPadLoginInfo, secondLogin, logout, getHttpCallbackUrl } from "../../controllers/eyun/authController"
 
 const router = Router()
 
@@ -11,6 +11,9 @@ router.post("/getIPadLoginInfo", getIPadLoginInfo)
 
 // Secondary login with existing wcId
 router.post("/secondLogin", secondLogin)
+
+// Logout
+router.post("/logout", logout)
 
 // Get callback URL
 router.post("/getHttpCallbackUrl", getHttpCallbackUrl)

@@ -110,6 +110,25 @@ export const secondLogin = async (req: Request, res: Response): Promise<void> =>
 }
 
 /**
+ * Logout - POST /logout
+ */
+export const logout = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { wId } = req.body
+        if (!wId) {
+            res.status(400).json({ code: "1001", message: "wId is required", data: null })
+            return
+        }
+        const eyun = getEyunService()
+        const result = await eyun.logout(wId)
+        res.json(result)
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error"
+        res.status(500).json({ code: "1001", message, data: null })
+    }
+}
+
+/**
  * Get current callback URL - POST /getHttpCallbackUrl
  */
 export const getHttpCallbackUrl = async (_req: Request, res: Response): Promise<void> => {

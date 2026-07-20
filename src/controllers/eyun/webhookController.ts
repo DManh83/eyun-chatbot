@@ -1,6 +1,6 @@
 import { Request, Response } from "express"
 import { getEyunService } from "../../services/eyunService"
-import { processIncomingMessage } from "../../services/quoteService"
+import { processIncomingMessage, processIncomingGroupMessage } from "../../services/quoteService"
 import { saveContact } from "../../services/contactService"
 import { chatHistory } from "../../models"
 
@@ -39,12 +39,55 @@ export const webhookCallback = async (req: Request, res: Response): Promise<void
         //     return
         // }
 
-        // Skip group messages (chatroom messages have @chatroom suffix or messageType starts with 85)
+        // Check if message is from a group (chatroom)
         const isGroupMessage =
             messageData.data?.userName?.includes("@chatroom") || messageData.messageType?.startsWith("85") || messageData.msgType === "GROUP_MODINFO"
 
+        // Get bot's nickname from message content (for group @mentions) or from the message itself
+        const botNickName = extractBotNickName(messageData.data?.content || "", messageData.data?.atUserList || [])
+
         if (isGroupMessage) {
-            console.log("[Webhook] Skipping group message")
+            // Check if bot is mentioned in group message
+            if (!botNickName) {
+                console.log("[Webhook] Group message but bot not mentioned, skipping")
+                res.json({ code: "1000", message: "ok" })
+                return
+            }
+
+            // Extract actual message content (remove @mention part)
+            const actualContent = extractGroupMessageContent(messageData.data?.content || "", botNickName)
+            if (!actualContent.trim()) {
+                console.log("[Webhook] Group message has no content after removing mention")
+                res.json({ code: "1000", message: "ok" })
+                return
+            }
+
+            console.log(`[Webhook] Group message mentioned bot (${botNickName}): ${actualContent}`)
+
+            const msgId = String(messageData.data.msgId)
+            const fromWxId = messageData.data.fromUser
+            const wId = messageData.data.wId
+            const chatRoomId = messageData.data.userName // This is the group ID for group messages
+            const nickName = extractNickname(messageData.data.pushContent) || ""
+
+            // Check duplicate by msgId
+            const existing = await chatHistory.findOne({ where: { msgId } })
+            if (existing) {
+                console.log(`[Webhook] Message ${msgId} already processed, skipping`)
+                res.json({ code: "1000", message: "ok" })
+                return
+            }
+
+            // Process group message with bot mention
+            await processIncomingGroupMessage({
+                msgId,
+                fromWxId,
+                chatRoomId,
+                content: actualContent,
+                wId,
+                nickName,
+            })
+
             res.json({ code: "1000", message: "ok" })
             return
         }
@@ -109,5 +152,41 @@ function extractNickname(pushContent: string | undefined): string | undefined {
     if (!pushContent) return undefined
     const parts = pushContent.split(" : ")
     return parts.length > 1 ? parts[0] : undefined
+}
+
+/**
+ * Extract bot's nickname when mentioned in group message
+ * Format: "@BotName Hello" or content may contain the @mention
+ * Returns the nickname if bot is mentioned, null otherwise
+ */
+function extractBotNickName(content: string, atUserList: string[]): string | null {
+    if (!content || !atUserList || atUserList.length === 0) return null
+
+    // Try to find bot mention in content - typically format is "@nickname "
+    const mentionMatch = content.match(/@(\S+)/)
+    if (mentionMatch) {
+        return mentionMatch[1]
+    }
+
+    return null
+}
+
+/**
+ * Extract actual message content from group message by removing @mention part
+ * Input: "@BotName Hello world" + "BotName" -> "Hello world"
+ */
+function extractGroupMessageContent(content: string, botNickName: string): string {
+    if (!content) return ""
+
+    // Remove @nickname pattern from the beginning of content
+    const pattern = new RegExp(`^@${escapeRegExp(botNickName)}\\s*`)
+    return content.replace(pattern, "").trim()
+}
+
+/**
+ * Escape special regex characters in a string
+ */
+function escapeRegExp(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
