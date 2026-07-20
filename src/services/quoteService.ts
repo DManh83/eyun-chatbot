@@ -3,6 +3,7 @@ import { sendMessageToCoze } from "./cozeService"
 import { getOpenClawService } from "./openclawService"
 import { chatHistory } from "../models"
 import { isWhitelisted } from "../config/whitelist"
+import { isBlacklisted } from "../config/blacklist"
 
 interface IncomingMessage {
     msgId: string
@@ -16,7 +17,7 @@ interface IncomingMessage {
 interface IncomingGroupMessage {
     msgId: string
     fromWxId: string
-    chatRoomId: string
+    fromGroup: string
     content: string
     wId: string
     nickName: string
@@ -35,6 +36,12 @@ export const processIncomingMessage = async (message: IncomingMessage): Promise<
 
     if (!wId) {
         console.log("[Quote] No wId provided in webhook")
+        return
+    }
+
+    // Skip blacklisted users
+    if (isBlacklisted(fromWxId)) {
+        console.log(`[Quote] ${fromWxId} is blacklisted, skipping`)
         return
     }
 
@@ -60,11 +67,19 @@ export const processIncomingMessage = async (message: IncomingMessage): Promise<
             aiResponse = await sendMessageToCoze(content, fromWxId)
         }
         if (aiResponse) {
-            console.log(`[Quote] AI response: ${aiResponse}`)
             const eyun = getEyunService()
-            await eyun.sendText({ wId, wcId: fromWxId, content: aiResponse })
-            console.log(`[Quote] Sent reply to ${fromWxId}: ${aiResponse}`)
-            await chatHistory.create({ msgId, wId, fromWxId, content, reply: aiResponse })
+            // Check if OpenClaw returned "No response"
+            if (aiResponse === "No response from OpenClaw.") {
+                console.log("[Quote] OpenClaw returned no response, using error message")
+                const errorMessage = "Sorry, the system is busy. Please try again in a few seconds. Thank you!"
+                await eyun.sendText({ wId, wcId: fromWxId, content: errorMessage })
+                await chatHistory.create({ msgId, wId, fromWxId, content, reply: errorMessage })
+            } else {
+                console.log(`[Quote] AI response: ${aiResponse}`)
+                await eyun.sendText({ wId, wcId: fromWxId, content: aiResponse })
+                console.log(`[Quote] Sent reply to ${fromWxId}: ${aiResponse}`)
+                await chatHistory.create({ msgId, wId, fromWxId, content, reply: aiResponse })
+            }
         } else {
             console.log("[Quote] AI failed, notifying customer to retry")
             const errorMessage = "Sorry, the system is busy. Please try again in a few seconds. Thank you!"
@@ -89,12 +104,18 @@ export const processIncomingMessage = async (message: IncomingMessage): Promise<
  * Sends reply to group with @mention to the sender
  */
 export const processIncomingGroupMessage = async (message: IncomingGroupMessage): Promise<void> => {
-    const { msgId, fromWxId, chatRoomId, content, wId, nickName } = message
+    const { msgId, fromWxId, fromGroup, content, wId, nickName } = message
 
-    console.log(`[Quote] Processing group message from ${fromWxId} in ${chatRoomId}: ${content}`)
+    console.log(`[Quote] Processing group message from ${fromWxId} in ${fromGroup}: ${content}`)
 
     if (!wId) {
         console.log("[Quote] No wId provided in webhook")
+        return
+    }
+
+    // Skip blacklisted users
+    if (isBlacklisted(fromWxId)) {
+        console.log(`[Quote] ${fromWxId} is blacklisted, skipping`)
         return
     }
 
@@ -116,11 +137,11 @@ export const processIncomingGroupMessage = async (message: IncomingGroupMessage)
             // Send to group with @mention to the sender
             await eyun.sendText({
                 wId,
-                wcId: chatRoomId,
-                content: `@${nickName} ${aiResponse}`,
+                wcId: fromGroup,
+                content: aiResponse,
                 at: fromWxId,
             })
-            console.log(`[Quote] Sent reply to group ${chatRoomId}: ${aiResponse}`)
+            console.log(`[Quote] Sent reply to group ${fromGroup}: ${aiResponse}`)
             await chatHistory.create({ msgId, wId, fromWxId, content, reply: aiResponse })
         } else {
             console.log("[Quote] AI failed, notifying customer to retry")
@@ -133,10 +154,11 @@ export const processIncomingGroupMessage = async (message: IncomingGroupMessage)
         const eyun = getEyunService()
         await eyun.sendText({
             wId,
-            wcId: chatRoomId,
-            content: `@${nickName} ${errorMessage}`,
+            wcId: fromGroup,
+            content: errorMessage,
             at: fromWxId,
         })
         await chatHistory.create({ msgId, wId, fromWxId, content, reply: errorMessage })
     }
 }
+

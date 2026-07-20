@@ -40,12 +40,11 @@ export const webhookCallback = async (req: Request, res: Response): Promise<void
         // }
 
         // Check if message is from a group (chatroom)
-        const isGroupMessage =
-            messageData.data?.userName?.includes("@chatroom") || messageData.messageType?.startsWith("85") || messageData.msgType === "GROUP_MODINFO"
+        const isGroupMessage = messageData.data?.fromGroup?.includes("@chatroom") || messageData.msgType === "GROUP_TEXT"
 
         // Get bot's nickname from message content (for group @mentions) or from the message itself
-        const botNickName = extractBotNickName(messageData.data?.content || "", messageData.data?.atUserList || [])
-
+        const botNickName = extractBotNickName(messageData.data?.content || "", [""])
+        console.log("botNickName", botNickName)
         if (isGroupMessage) {
             // Check if bot is mentioned in group message
             if (!botNickName) {
@@ -67,7 +66,8 @@ export const webhookCallback = async (req: Request, res: Response): Promise<void
             const msgId = String(messageData.data.msgId)
             const fromWxId = messageData.data.fromUser
             const wId = messageData.data.wId
-            const chatRoomId = messageData.data.userName // This is the group ID for group messages
+            const fromGroup = messageData.data.fromGroup // This is the group ID for group messages
+            console.log(messageData)
             const nickName = extractNickname(messageData.data.pushContent) || ""
 
             // Check duplicate by msgId
@@ -79,14 +79,14 @@ export const webhookCallback = async (req: Request, res: Response): Promise<void
             }
 
             // Process group message with bot mention
-            await processIncomingGroupMessage({
-                msgId,
-                fromWxId,
-                chatRoomId,
-                content: actualContent,
-                wId,
-                nickName,
-            })
+            // await processIncomingGroupMessage({
+            //     msgId,
+            //     fromWxId,
+            //     fromGroup,
+            //     content: actualContent,
+            //     wId,
+            //     nickName,
+            // })
 
             res.json({ code: "1000", message: "ok" })
             return
@@ -121,10 +121,10 @@ export const webhookCallback = async (req: Request, res: Response): Promise<void
                 return
             }
 
-            if (msgType !== 1) {
-                console.log(`[Webhook] Skipping non-text message type: ${msgType}`)
-                return
-            }
+            // if (msgType !== 1) {
+            //     console.log(`[Webhook] Skipping non-text message type: ${msgType}`)
+            //     return
+            // }
 
             const mappedMessage = {
                 fromWxId,
@@ -156,16 +156,22 @@ function extractNickname(pushContent: string | undefined): string | undefined {
 
 /**
  * Extract bot's nickname when mentioned in group message
- * Format: "@BotName Hello" or content may contain the @mention
- * Returns the nickname if bot is mentioned, null otherwise
+ * If atUserList has entries, someone was mentioned (including possibly the bot)
+ * Returns the nickname if found, or a placeholder "bot" if atUserList is not empty
  */
 function extractBotNickName(content: string, atUserList: string[]): string | null {
-    if (!content || !atUserList || atUserList.length === 0) return null
-
-    // Try to find bot mention in content - typically format is "@nickname "
-    const mentionMatch = content.match(/@(\S+)/)
-    if (mentionMatch) {
-        return mentionMatch[1]
+    // If atUserList has entries, someone was mentioned
+    if (atUserList && atUserList.length > 0) {
+        // Try to extract nickname from content after @
+        if (content) {
+            // Match @ followed by any characters until whitespace
+            const mentionMatch = content.match(/@(\S+)/)
+            if (mentionMatch) {
+                return mentionMatch[1]
+            }
+        }
+        // If we can't extract from content but atUserList has values, return placeholder
+        return "bot"
     }
 
     return null
@@ -174,19 +180,14 @@ function extractBotNickName(content: string, atUserList: string[]): string | nul
 /**
  * Extract actual message content from group message by removing @mention part
  * Input: "@BotName Hello world" + "BotName" -> "Hello world"
+ * Also handles case where @mention is in the content
  */
 function extractGroupMessageContent(content: string, botNickName: string): string {
     if (!content) return ""
 
-    // Remove @nickname pattern from the beginning of content
-    const pattern = new RegExp(`^@${escapeRegExp(botNickName)}\\s*`)
+    // Remove @nickname pattern from the content (not just beginning)
+    const escapedNickName = botNickName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    const pattern = new RegExp(`@${escapedNickName}\\s*`)
     return content.replace(pattern, "").trim()
-}
-
-/**
- * Escape special regex characters in a string
- */
-function escapeRegExp(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
